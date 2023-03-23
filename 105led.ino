@@ -1,58 +1,117 @@
-#include "DHT.h"
-#define DHTTYPE DHT11
-int led[4] = {2,3,4,5};
-int clockPin = 6;
-int latchPin = 7;
-int dataPin = 8;
-int tempPin = 9;
-int dayPlus = 0;
-int dayMinus = 1;
-int num[10] = {0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90};
-int showTemp = 0;
+#include <EEPROM.h>
+//timer
+unsigned int timer[4], count1 = 0, count2 = 0, count3 = 0;
 
-void setup() {
-  // put your setup code here, to run once:
-  pinMode(dayPlus,INPUT);
-  pinMode(dayMinus,INPUT);
-  pinMode(led[0],OUTPUT);
-  pinMode(led[1],OUTPUT);
-  pinMode(led[2],OUTPUT);
-  pinMode(led[3],OUTPUT);
-  pinMode(clockPin,OUTPUT);
-  pinMode(latchPin,OUTPUT);
-  pinMode(dataPin,OUTPUT);
-  DHT dht(tempPin, DHTTYPE);
-}
+//ledfunction
+int led[3] = {1, 2, 3};
+int clockPin = 4;
+int latchPin = 5;
+int dataPin = 6;
+int dayPlus = 12;
+int dayMinus = 13;
+int num[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x67};
 int day = 200;
 int i = 0;
+
+
+void setup() {
+
+    //timer
+    cli();
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCNT1 = 0;
+    TIMSK1 |= (1 << TOIE1);
+    TCCR1B |= (1 << CS12);
+    sei();
+    for (int i = 0; i < 4; i++)
+        timer[i] = 0;
+    if (EEPROM.read(0) != 255){
+      day = 0;
+      day += EEPROM.read(0) * 100;
+      day += EEPROM.read(1) * 10;
+      day += EEPROM.read(2);
+    }
+}
+
+ISR(TIMER1_OVF_vect) {
+    int i;
+    TCNT1 = 65224;
+    for (i = 0; i < 4; i++) {
+        if (timer[i] > 0)
+            timer[i]--;
+    }
+
+    //ledfunction
+    pinMode(1, OUTPUT);
+    pinMode(2, OUTPUT);
+    pinMode(3, OUTPUT);
+    pinMode(4, OUTPUT);
+    pinMode(5, OUTPUT);
+    pinMode(6, OUTPUT);
+    pinMode(9, OUTPUT);
+    pinMode(12, INPUT);
+    pinMode(13, INPUT);
+}
+
+
+void lb() {
+    if(digitalRead(dayPlus) == LOW && digitalRead(dayMinus) == LOW){
+      int a = day / 100 % 10;
+      int b = day / 10 % 10;
+      int c = day % 10;
+      EEPROM.write(0, a);
+      delay(5);
+      EEPROM.write(1, b);
+      delay(5);
+      EEPROM.write(2, c);
+      delay(5);
+    }else{
+      if (digitalRead(dayPlus) == LOW) {
+          day++;
+      }
+      if (digitalRead(dayMinus) == LOW) {
+          day--;
+      }
+    }
+}
+
+void ledf() {
+    digitalWrite(led[0], HIGH);
+    digitalWrite(led[1], HIGH);
+    digitalWrite(led[2], HIGH);
+    digitalWrite(led[i], LOW);
+    digitalWrite(latchPin, LOW);
+    int showNum = 0;
+    if (i == 0) showNum = day / 100 % 10;
+    if (i == 1) showNum = day / 10 % 10;
+    if (i == 2) showNum = day % 10;
+    shiftOut(dataPin, clockPin, MSBFIRST, num[showNum]);
+    digitalWrite(latchPin, HIGH);
+    i++;
+    delay(1);
+}
+
 void loop() {
-  float h = dht.readHumidity();   //取得濕度
-  float t = dht.readTemperature();  //取得溫度C
-  digitalWrite(led[0], LOW);
-  digitalWrite(led[1], LOW);
-  digitalWrite(led[2], LOW);
-  digitalWrite(led[3], LOW);
-  digitalWrite(led[i], HIGH);
-  digitalWrite(latchPin, LOW);
-  int showNum = 0;
-  if (i % 4 == 0) showNum = day / 1000 % 100;
-  if (i % 4 == 1) showNum = day / 100 % 10;
-  if (i % 4 == 2) showNum = day / 10 % 10;
-  if (i % 4 == 3) showNum = day % 10;
-//  showNum = 8;
-  shiftOut(dataPin, clockPin, LSBFIRST, num[showNum]);
-  digitalWrite(latchPin, HIGH);
-  if (digitalRead(dayPlus) == LOW) {
-    delay(350);
-    day++;
+    if (timer[0] == 0) { //timer 單位5ms
+        timer[0] = 1440000;
+        int a = day / 100 % 10;
+        int b = day / 10 % 10;
+        int c = day % 10;
+        EEPROM.write(0, a);
+        delay(5);
+        EEPROM.write(1, b);
+        delay(5);
+        EEPROM.write(2, c);
+        delay(5);
     }
-  if (digitalRead(dayMinus) == LOW) {
-    delay(350);
-    day--;
+    ledf();
+    if (timer[1] == 0) { //timer 單位5ms
+        timer[1] = 20;
+        lb();
     }
-  i++;
-  if(day >= 9999) day = 9999;
-  if(day <= 0) day = 0;
-  if(i >= 4) i = 0;
-  delay(2);
+
+    if (day >= 999) day = 999;
+    if (day <= 0) day = 0;
+    if (i >= 3) i = 0;
 }
